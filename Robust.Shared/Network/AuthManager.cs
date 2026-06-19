@@ -27,7 +27,7 @@ namespace Robust.Shared.Network
 
     internal sealed class AuthManager : IAuthManager
     {
-        public const string DefaultAuthServer = "https://auth.spacestation14.com/";
+        public const string DefaultAuthServer = "https://auth.playss14.com/";
         public const string DefaultStarlightAPI = "https://starlight.network/"; // Starlight-edit
 
         public NetUserId? UserId { get; set; }
