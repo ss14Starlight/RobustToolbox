@@ -637,7 +637,6 @@ namespace Robust.Shared
         #region Starlight
         /// <summary>
         /// Whether to enable granular metrics in the <see cref="SharedUserInterfaceSystem"/>.
-        /// This adds various 
         /// </summary>
         public static readonly CVarDef<bool> MetricsGranularUiSystem =
             CVarDef.Create("metrics.granular_ui_system", false, CVar.SERVERONLY);
