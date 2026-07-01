@@ -16,15 +16,17 @@ using Robust.Shared.Threading;
 using Robust.Shared.Timing;
 using Robust.Shared.Utility;
 
+#region Starlight
 using Prometheus;
 using Robust.Shared.Configuration;
 using Stopwatch = System.Diagnostics.Stopwatch;
+#endregion
 
 namespace Robust.Shared.GameObjects;
 
 public abstract partial class SharedUserInterfaceSystem : EntitySystem
 {
-    [Dependency] private IConfigurationManager _cfg = default!;
+    [Dependency] private IConfigurationManager _cfg = default!; // Starlight
     [Dependency] private IDynamicTypeFactory _factory = default!;
     [Dependency] private IGameTiming _timing = default!;
     [Dependency] private INetManager _netManager = default!;
@@ -43,7 +45,7 @@ public abstract partial class SharedUserInterfaceSystem : EntitySystem
 
     #region Starlight
     private static readonly Histogram UpdateHistogram = Metrics.CreateHistogram(
-        "robust_bui_system_update_usage",
+        "robust_bui_update_usage",
         "Time spent in Update per phase",
         new HistogramConfiguration
         {
@@ -69,12 +71,15 @@ public abstract partial class SharedUserInterfaceSystem : EntitySystem
             Buckets = Histogram.ExponentialBuckets(0.000_001, 1.5, 25)
         });
 
-    // Pre-allocated children for fixed phases; BUI types are cached on first use.
+    // The three 'phases' of the Update method.
     private static readonly Histogram.Child MonitorRangeQuery = UpdateHistogram.WithLabels("RangeQuery");
     private static readonly Histogram.Child MonitorRangeParallel = UpdateHistogram.WithLabels("RangeParallel");
     private static readonly Histogram.Child MonitorRangeClose = UpdateHistogram.WithLabels("RangeClose");
+
+    // Reused histogram children per BUI / BUI key type.
     private readonly Dictionary<Type, Histogram.Child> _setStateMonitors = new();
     private readonly Dictionary<Type, Histogram.Child> _rangeCheckMonitors = new();
+
     private readonly Stopwatch _stopwatch = new();
 
     public bool MetricsEnabled { get; private set; }
