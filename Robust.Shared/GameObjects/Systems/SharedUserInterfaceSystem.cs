@@ -82,7 +82,10 @@ public abstract partial class SharedUserInterfaceSystem : EntitySystem
 
     private readonly Stopwatch _stopwatch = new();
 
-    public bool MetricsEnabled { get; private set; }
+    private bool _globalMetricsEnabled;
+    private bool _granularUiSystemMetricsEnabled;
+    private bool MetricsEnabled => _globalMetricsEnabled && _granularUiSystemMetricsEnabled;
+
     #endregion Starlight
 
     /// <summary>
@@ -96,7 +99,10 @@ public abstract partial class SharedUserInterfaceSystem : EntitySystem
 
         // Starlight BEGIN
         if (_netManager.IsServer)
-            Subs.CVar(_cfg, CVars.MetricsEnabled, v => MetricsEnabled = v, true);
+        {
+            Subs.CVar(_cfg, CVars.MetricsEnabled, v => _globalMetricsEnabled = v, true);
+            Subs.CVar(_cfg, CVars.MetricsGranularUiSystem, v => _granularUiSystemMetricsEnabled = v, true);
+        }
         // Starlight END
 
         EntityManager.ComponentFactory.RegisterNetworkedFields<UserInterfaceComponent>(
