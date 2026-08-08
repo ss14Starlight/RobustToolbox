@@ -37,6 +37,10 @@ public sealed partial class OccluderComponent : Component, IComponentTreeEntry<O
         East = 1 << 1,
         South = 1 << 2,
         West = 1 << 3,
+        SouthEast = 1 << 4,
+        SouthWest = 1 << 5,
+        NorthEast = 1 << 6,
+        NorthWest = 1 << 7,
     }
 
     [NetSerializable, Serializable]
