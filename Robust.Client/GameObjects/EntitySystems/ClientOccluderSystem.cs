@@ -227,6 +227,10 @@ internal sealed partial class ClientOccluderSystem : OccluderSystem
             Direction.North => OccluderDir.North,
             Direction.East => OccluderDir.East,
             Direction.West => OccluderDir.West,
+            Direction.SouthEast => OccluderDir.SouthEast, /// these don't actually do much except prevent crashing with, say, holy hand grenades 
+            Direction.SouthWest => OccluderDir.SouthWest,
+            Direction.NorthEast => OccluderDir.NorthEast,
+            Direction.NorthWest => OccluderDir.NorthWest,
             _ => throw new ArgumentException($"Invalid dir: {dir}.")
         };
     }
