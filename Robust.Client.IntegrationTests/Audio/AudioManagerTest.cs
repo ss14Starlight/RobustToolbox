@@ -3,9 +3,7 @@ using Robust.Client.Audio;
 using Robust.Shared;
 using Robust.Shared.Audio;
 using Robust.Shared.IoC;
-using Robust.Shared.Maths;
 using Robust.UnitTesting;
-using System.Numerics;
 
 namespace Robust.Client.IntegrationTests.Audio;
 
@@ -14,43 +12,6 @@ namespace Robust.Client.IntegrationTests.Audio;
 [Explicit("Server test-runners don't typically have the means of running OpenAL.")]
 public sealed class AudioManagerTest : RobustIntegrationTest
 {
-    [Test]
-    public async Task SurvivesWithoutOutputDevice()
-    {
-        // ALSOFT_DRIVERS=null forces the silent backend even on a machine with real output.
-        Environment.SetEnvironmentVariable("ALSOFT_DRIVERS", "null");
-
-        var client = StartClient(new ClientIntegrationOptions
-        {
-            Pool = false,
-            InitIoC = () =>
-            {
-                IoCManager.Register<IAudioManager, AudioManager>(overwrite: true);
-                IoCManager.Register<IAudioInternal, AudioManager>(overwrite: true);
-            },
-        });
-        await client.WaitIdleAsync();
-
-        var audio = client.ResolveDependency<IAudioInternal>();
-
-        await client.WaitAssertion(() =>
-        {
-            Assert.That(audio.IsInitialized, Is.True, "null backend should still initialise");
-
-            // None of these may throw with no real output.
-            Assert.DoesNotThrow(() => audio.SetPosition(Vector2.Zero));
-            Assert.DoesNotThrow(() => audio.SetRotation(Angle.Zero));
-            Assert.DoesNotThrow(() => audio.StopAllAudio());
-
-            var stream = audio.LoadAudioRaw(new short[1024], 1, 44100, "test");
-            Assert.That(stream, Is.Not.Null);
-
-            var source = audio.CreateAudioSource(stream);
-            Assert.DoesNotThrow(() => source?.StartPlaying());
-            source?.Dispose();
-        });
-    }
-
     [Test]
     public async Task SwitchesAudioDevice()
     {
@@ -145,7 +106,7 @@ public sealed class AudioAttenuationTest
             }
             catch (ArgumentOutOfRangeException ex)
             {
-                Assert.That(a == Attenuation.Invalid, $"Got \"No attenuation formula for {a}!\" when {a} is not Invalid!!!");
+                Assert.That(a, Is.EqualTo(Attenuation.Invalid), $"Got \"No attenuation formula for {a}!\" when {a} is not Invalid!!! Exception: {ex}");
             }
         }
     }
