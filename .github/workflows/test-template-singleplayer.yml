@@ -1,12 +1,13 @@
 name: Test RobustToolboxTemplateSingleplayer against engine
 
 on:
-  push:
-    branches: [master]
-  merge_group:
-  pull_request:
-    types: [ opened, reopened, synchronize, ready_for_review ]
-    branches: [master]
+  workflow_dispatch:
+  # push:
+  #   branches: [master]
+  # merge_group:
+  # pull_request:
+  #   types: [ opened, reopened, synchronize, ready_for_review ]
+  #   branches: [master]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
@@ -49,7 +50,7 @@ jobs:
 
       - name: Run tests
         shell: pwsh
-        run: dotnet test --no-build -- NUnit.ConsoleOut=0 NUnit.TestOutputXml="logs" NUnit.WorkDirectory="$(pwd)/test_results"
+        run: dotnet test --no-build --settings RobustToolbox/.github/ci.runsettings
         working-directory: template
 
       - name: Archive NUnit3 test results.
@@ -57,5 +58,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nunit3-results-template-singleplayer
-          path: template/test_results/*
+          path: template/**/test_results/**/*.xml
           retention-days: 7

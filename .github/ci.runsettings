@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RunSettings>
+  <NUnit>
+    <ConsoleOut>0</ConsoleOut>
+    <TestOutputXml>logs</TestOutputXml>
+    <WorkDirectory>test_results</WorkDirectory>
+  </NUnit>
+</RunSettings>

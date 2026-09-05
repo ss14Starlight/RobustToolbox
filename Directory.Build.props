@@ -17,6 +17,7 @@
     Being strict is always good.
     -->
     <DisableTransitiveProjectReferences>True</DisableTransitiveProjectReferences>
+    <EnableNUnitRunner>true</EnableNUnitRunner>
 
     <!--
     Shut up broken package pruning warnings.

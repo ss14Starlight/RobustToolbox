@@ -36,11 +36,11 @@ jobs:
         run: dotnet build --no-restore /p:WarningsAsErrors=nullable
       - name: Run tests
         shell: pwsh
-        run: dotnet test --no-build -- NUnit.ConsoleOut=0 NUnit.TestOutputXml="logs" NUnit.WorkDirectory="$(pwd)/test_results"
+        run: dotnet test --no-build --settings .github/ci.runsettings --retry-failed-tests 2 --progress on
       - name: Archive NUnit3 test results.
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nunit3-results-${{ matrix.os }}
-          path: test_results/*
+          path: '**/test_results/**/*.xml'
           retention-days: 7

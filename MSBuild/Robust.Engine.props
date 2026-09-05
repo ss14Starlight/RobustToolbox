@@ -7,4 +7,7 @@
         <WarningsAsErrors>nullable;CS8785</WarningsAsErrors>
     </PropertyGroup>
     <Import Project="Robust.Engine.Version.props" />
+    <ItemGroup>
+        <PackageVersion Include="Microsoft.Testing.Extensions.Retry" Version="2.3.3" />
+    </ItemGroup>
 </Project>

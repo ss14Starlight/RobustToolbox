@@ -43,6 +43,7 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing"/>
     <PackageReference Include="NUnit"/>
     <PackageReference Include="NUnit3TestAdapter"/>
+    <PackageReference Include="Microsoft.Testing.Extensions.Retry"/>
     <PackageReference Include="NUnit.Analyzers"/>
     <PackageReference Include="Microsoft.NET.Test.Sdk"/>
 
