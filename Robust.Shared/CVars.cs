@@ -1078,7 +1078,7 @@ namespace Robust.Shared
         /// Mode with which to handle ADDITIONAL authentication on the server.
         /// </summary>
         public static readonly CVarDef<int> AdditionalAuthMode =
-            CVarDef.Create("auth.additionalmode", (int)Network.AuthMode.Disabled, CVar.SERVERONLY);
+            CVarDef.Create("auth.additionalmode", (int)Network.AdditionalAuthModes.Disabled, CVar.SERVERONLY);
         #endregion
 
         /// <summary>

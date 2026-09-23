@@ -72,6 +72,9 @@ namespace Robust.Shared.Network
                     var willAuthenticate = canAuth || (discord && allowDiscord) || (steam && allowSteam);
                     if (!willAuthenticate)
                     {
+                        _authLogger.Warning(
+                            "{0}: refusing unauthenticated login: canAuth={1}, discord={2}, steam={3}, auth.additionalmode={4}",
+                            connection.RemoteEndPoint, canAuth, discord, steam, AdditionalAuth);
                         connection.Disconnect("This server requires authentication.");
                         return;
                     }

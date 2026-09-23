@@ -136,7 +136,7 @@ namespace Robust.Shared.Network
             var steamToken = _authManager.SteamToken;
 
             var useSteam = !string.IsNullOrEmpty(steamToken);
-            var useDiscord = !useSteam && !string.IsNullOrEmpty(discordToken);
+            var useDiscord = !string.IsNullOrEmpty(discordToken);
             // Starlight-end
 
             var hasPubKey = !string.IsNullOrEmpty(pubKey);
