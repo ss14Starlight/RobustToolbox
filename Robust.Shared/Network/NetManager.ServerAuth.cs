@@ -91,14 +91,20 @@ namespace Robust.Shared.Network
                     var verifyToken = new byte[4];
                     RandomNumberGenerator.Fill(verifyToken);
                     var wantHwid = _config.GetCVar(CVars.NetHWId);
+                    // Starlight-start
+                    // the client only uses a Starlight token when we ask for it (and prefers steam over discord),
+                    // so the hasJoined lookup below must follow the same decision, not the raw client flags
+                    var wantSteam = steam && AdditionalAuth is AdditionalAuthModes.SteamEnabled or AdditionalAuthModes.Any;
+                    var wantDiscord = !wantSteam && discord && AdditionalAuth is AdditionalAuthModes.DiscordEnabled or AdditionalAuthModes.Any;
+                    // Starlight-end
                     var msgEncReq = new MsgEncryptionRequest
                     {
                         PublicKey = needPk ? CryptoPublicKey : Array.Empty<byte>(),
                         VerifyToken = verifyToken,
                         WantHwid = wantHwid,
                         // Starlight-start
-                        WantDiscord = discord && AdditionalAuth is AdditionalAuthModes.DiscordEnabled or AdditionalAuthModes.Any,
-                        WantSteam = steam && AdditionalAuth is AdditionalAuthModes.SteamEnabled or AdditionalAuthModes.Any,
+                        WantDiscord = wantDiscord,
+                        WantSteam = wantSteam,
                         // Starlight-end
                     };
 
@@ -156,14 +162,14 @@ namespace Robust.Shared.Network
 
                     // Starlight-start
                     string url = "";
-                    if (discord)
+                    if (wantDiscord)
                     {
                         var starlightApi = _config.GetCVar(CVars.StarlightAPIServer);
                         url = $"{starlightApi}api/discord-auth/hasJoined" +
                                   $"?hash={authHash}&" +
                                   $"userId={msgEncResponse.UserId}";
                     }
-                    else if (steam)
+                    else if (wantSteam)
                     {
                         var starlightApi = _config.GetCVar(CVars.StarlightAPIServer);
                         url = $"{starlightApi}api/steam-auth/hasJoined" +
