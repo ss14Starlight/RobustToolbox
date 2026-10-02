@@ -1,4 +1,7 @@
 ﻿using System;
+#if !ROBUST_ANALYZERS_TEST
+using JetBrains.Annotations;
+#endif
 
 namespace Robust.Shared.IoC
 {
@@ -16,6 +19,9 @@ namespace Robust.Shared.IoC
     /// </para>
     /// </remarks>
     [AttributeUsage(AttributeTargets.Field)]
+#if !ROBUST_ANALYZERS_TEST
+    [MeansImplicitUse(ImplicitUseKindFlags.Assign)]
+#endif
     public sealed class DependencyAttribute : Attribute
     {
     }
