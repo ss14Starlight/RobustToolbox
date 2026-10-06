@@ -54,6 +54,8 @@ internal sealed partial class AudioManager : IAudioInternal
 
     internal bool IsEfxSupported;
 
+    bool IAudioInternal.IsEfxSupported => IsEfxSupported;
+
     internal ISawmill OpenALSawmill = default!;
 
     private void _audioCreateContext()
@@ -167,6 +169,8 @@ internal sealed partial class AudioManager : IAudioInternal
     private void InitializeAudio()
     {
         OpenALSawmill = _logMan.GetSawmill("clyde.oal");
+
+        PreloadOpenAl();
 
         if (!_audioOpenDevice())
             return;

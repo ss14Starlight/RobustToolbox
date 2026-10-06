@@ -1,4 +1,5 @@
 using Robust.Client.Audio.Effects;
+using Robust.Shared.Audio.Effects;
 using Robust.Shared.Audio.Components;
 using Robust.Shared.GameObjects;
 
@@ -18,8 +19,8 @@ public sealed partial class AudioSystem
 
     private void OnEffectAdd(EntityUid uid, AudioEffectComponent component, ComponentAdd args)
     {
-        var effect = new AudioEffect(_audio);
-        component.Effect = effect;
+        // Without EFX (e.g. an old Creative OpenAL) creating a real effect only fills the log with AL errors.
+        component.Effect = _audio.IsEfxSupported ? new AudioEffect(_audio) : new DummyAudioEffect();
     }
 
     private void OnEffectShutdown(EntityUid uid, AudioEffectComponent component, ComponentShutdown args)
@@ -32,7 +33,7 @@ public sealed partial class AudioSystem
 
     private void OnAuxiliaryAdd(EntityUid uid, AudioAuxiliaryComponent component, ComponentAdd args)
     {
-        component.Auxiliary = new AuxiliaryAudio();
+        component.Auxiliary = _audio.IsEfxSupported ? new AuxiliaryAudio() : new DummyAuxiliaryAudio();
     }
 
     private void OnAuxiliaryAuto(EntityUid uid, AudioAuxiliaryComponent component, ref AfterAutoHandleStateEvent args)

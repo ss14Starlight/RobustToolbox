@@ -13,6 +13,11 @@ namespace Robust.Client.Audio;
 /// </summary>
 internal interface IAudioInternal : IAudioManager
 {
+    /// <summary>
+    /// Whether the OpenAL device has the EFX extension (filters, reverb). Without it effects must not be created.
+    /// </summary>
+    bool IsEfxSupported { get; }
+
     void InitializePostWindowing();
     void Shutdown();
 
