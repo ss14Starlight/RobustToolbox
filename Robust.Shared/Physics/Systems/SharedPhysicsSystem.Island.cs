@@ -881,10 +881,11 @@ public abstract partial class SharedPhysicsSystem
         }
 
         island.PositionSolved = false;
+        var contactsOkay = false; // Starlight
 
         for (var i = 0; i < data.PositionIterations; i++)
         {
-            var contactsOkay = SolvePositionConstraints(in data, in island, options, positionConstraints, positions, angles);
+            contactsOkay = SolvePositionConstraints(in data, in island, options, positionConstraints, positions, angles); // Starlight
             var jointsOkay = true;
 
             for (var j = 0; j < island.Joints.Count; ++j)
@@ -905,6 +906,9 @@ public abstract partial class SharedPhysicsSystem
                 break;
             }
         }
+
+        if (!contactsOkay) // Starlight
+            RecoverClippedBodies(in data, in island, positionConstraints, positions, angles); // Starlight
 
         // Transform the solved positions back into local terms
         // This means we can run the entire solver in parallel and not have to worry about stale world positions later
