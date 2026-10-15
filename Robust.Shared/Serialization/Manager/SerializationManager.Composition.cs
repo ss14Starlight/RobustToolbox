@@ -151,6 +151,9 @@ public partial class SerializationManager
         //todo implement different inheritancebehaviours for yamlfield
         // I have NFI what this comment means.
 
+        if (TryCombineSequenceEdits(child, parent, out var combined)) // Starlight-edit
+            return combined;
+
         var result = child.Copy();
         foreach (var entry in parent)
         {
@@ -200,6 +203,12 @@ public partial class SerializationManager
                         {
                             newMapping[key] = PushComposition(field.FieldType, parentValue, childValue, context);
                         }
+                        // Starlight-start
+                        else if (TryCombineSequenceEdits(childValue, parentValue, out var combined))
+                        {
+                            newMapping[key] = combined;
+                        }
+                        // Starlight-end
                     }
                     else
                     {

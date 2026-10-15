@@ -190,6 +190,9 @@ public sealed partial class SerializationManager
 
     public ValidationNode ValidateNode(Type type, DataNode node, ISerializationContext? context = null)
     {
+        if (TryGetUnappliedRemoveError(node, out var removeError)) // Starlight-edit
+            return removeError;
+
         var underlyingType = type.GetUnderlyingType();
 
         if (underlyingType != null) // implies that type was nullable
