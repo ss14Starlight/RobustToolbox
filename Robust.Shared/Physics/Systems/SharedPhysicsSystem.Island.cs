@@ -896,7 +896,7 @@ public abstract partial class SharedPhysicsSystem
         }
 
         island.PositionSolved = false;
-        var contactsOkay = false; // Starlight
+        var contactsOkay = false; // Starlight 
 
         for (var i = 0; i < data.PositionIterations; i++)
         {
@@ -994,13 +994,12 @@ public abstract partial class SharedPhysicsSystem
             {
                 for (var i = 0; i < bodyCount; i++)
                 {
-                    var body = island.Bodies[i].Comp1;
+                    var bodyEnt = island.Bodies[i]; // Starlight-edit: Keep the transform so the sleep check can measure this step's movement.
+                    var body = bodyEnt.Comp1; // Starlight
 
                     if (body.BodyType == BodyType.Static) continue;
 
-                    if (!body.SleepingAllowed ||
-                        body.AngularVelocity * body.AngularVelocity > data.AngTolSqr ||
-                        Vector2.Dot(body.LinearVelocity, body.LinearVelocity) > data.LinTolSqr)
+                    if (!RestingThisStep(body, bodyEnt.Comp2, solvedPositions[offset + i], solvedAngles[offset + i], data)) // Starlight-edit: A body leaving a wall has no velocity while the position solver is still moving it.
                     {
                         SetSleepTime(body, 0f);
                     }
@@ -1025,13 +1024,12 @@ public abstract partial class SharedPhysicsSystem
 
                 for (var i = 0; i < bodyCount; i++)
                 {
-                    var body = island.Bodies[i].Comp1;
+                    var bodyEnt = island.Bodies[i]; // Starlight-edit: Keep the transform so the sleep check can measure this step's movement.
+                    var body = bodyEnt.Comp1; // Starlight
 
                     if (body.BodyType == BodyType.Static) continue;
 
-                    if (!body.SleepingAllowed ||
-                        body.AngularVelocity * body.AngularVelocity > data.AngTolSqr ||
-                        Vector2.Dot(body.LinearVelocity, body.LinearVelocity) > data.LinTolSqr)
+                    if (!RestingThisStep(body, bodyEnt.Comp2, solvedPositions[offset + i], solvedAngles[offset + i], data)) // Starlight-edit: A body leaving a wall has no velocity while the position solver is still moving it.
                     {
                         SetSleepTime(body, 0f);
                         minSleepTime = 0.0f;
@@ -1043,7 +1041,8 @@ public abstract partial class SharedPhysicsSystem
                     }
                 }
 
-                if (minSleepTime >= data.TimeToSleep && island.PositionSolved)
+                if (minSleepTime >= data.TimeToSleep &&
+                    (island.PositionSolved || CanSleepWithUnsolvedStaticContacts(in island))) // Starlight-edit: A stopped body stuck in a wall can sleep even though that overlap never solves.
                 {
                     for (var i = 0; i < island.Bodies.Count; i++)
                     {
@@ -1060,6 +1059,86 @@ public abstract partial class SharedPhysicsSystem
         ArrayPool<ContactPositionConstraint>.Shared.Return(positionConstraints);
     }
 
+    // Starlight-Start
+    /// <summary>
+    /// Allows a fully resting dynamic body to sleep when its only constraints are unsolved hard
+    /// contacts against static geometry. Dynamic, kinematic, and joint-connected contacts retain
+    /// the normal <see cref="IslandData.PositionSolved"/> requirement.
+    /// </summary>
+    private static bool CanSleepWithUnsolvedStaticContacts(in IslandData island) // Starlight-edit: Limit the stuck-wall sleep exemption to dynamic bodies touching only static geometry.
+    {
+        if (island.Joints.Count != 0 || island.Contacts.Count == 0)
+            return false;
+
+        foreach (var contact in island.Contacts)
+        {
+            if (!contact.Enabled ||
+                !contact.IsTouching ||
+                contact.FixtureA?.Hard != true ||
+                contact.FixtureB?.Hard != true ||
+                contact.BodyA is not { } bodyA ||
+                contact.BodyB is not { } bodyB)
+            {
+                return false;
+            }
+
+            var bodyAStatic = bodyA.BodyType == BodyType.Static;
+            var bodyBStatic = bodyB.BodyType == BodyType.Static;
+
+            // Require exactly one static and one ordinary dynamic body.
+            if (bodyAStatic == bodyBStatic)
+                return false;
+
+            var dynamicBody = bodyAStatic ? bodyB : bodyA;
+            if (dynamicBody.BodyType != BodyType.Dynamic)
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// True when this step's velocity and position correction are both under the sleep tolerances.
+    /// Position correction never writes <see cref="PhysicsComponent.LinearVelocity"/>, so a body
+    /// being pushed out of a wall would otherwise accumulate sleep time while it is still moving.
+    /// </summary>
+    private static bool RestingThisStep(
+        PhysicsComponent body,
+        TransformComponent xform,
+        Vector2 positionDelta,
+        float angleDelta,
+        in SolverData data) // Advance sleep time only when both velocity and this step's position correction are slow enough.
+    {
+        if (!body.SleepingAllowed)
+            return false;
+
+        if (body.AngularVelocity * body.AngularVelocity > data.AngTolSqr ||
+            Vector2.Dot(body.LinearVelocity, body.LinearVelocity) > data.LinTolSqr)
+            return false;
+
+        if (float.IsNaN(positionDelta.X) || float.IsNaN(positionDelta.Y) || float.IsNaN(angleDelta))
+            return false;
+
+        // FinalisePositions stores the transform-origin delta, but the solver integrates the
+        // center of mass. Remove origin motion caused only by rotation around an offset center.
+        var oldRotation = new Quaternion2D(xform._localRotation);
+        var newRotation = new Quaternion2D(xform._localRotation + angleDelta);
+        var centerDelta = positionDelta
+                          + Physics.Transform.Mul(newRotation, body.LocalCenter)
+                          - Physics.Transform.Mul(oldRotation, body.LocalCenter);
+
+        var lin = centerDelta * data.InvDt;
+        if (Vector2.Dot(lin, lin) > data.LinTolSqr)
+            return false;
+
+        var ang = angleDelta * data.InvDt;
+        if (ang * ang > data.AngTolSqr)
+            return false;
+
+        return true;
+    }
+    // Starlight-End
+
     private void FinalisePositions(int start, int end, int offset, List<Entity<PhysicsComponent, TransformComponent>> bodies, Vector2[] positions, float[] angles, Vector2[] solvedPositions, float[] solvedAngles)
     {
         for (var i = start; i < end; i++)
@@ -1074,7 +1153,11 @@ public abstract partial class SharedPhysicsSystem
             // TODO: Root cause out why this TryComp is necessary.
             // See https://github.com/space-wizards/RobustToolbox/pull/6135
             if (!TryComp(xform.ParentUid, out TransformComponent? transform))
+            {
+                solvedPositions[offset + i] = Vector2.Zero; // Starlight-edit: Clear an unread position delta so a skipped body is not treated as still moving.
+                solvedAngles[offset + i] = 0f; // Starlight-edit: Clear an unread angle delta so a skipped body is not treated as still moving.
                 continue;
+            }
 
             var (_, parentRot, parentInvMatrix) = _transform.GetWorldPositionRotationInvMatrix(transform);
             var worldRot = (float) (parentRot + xform._localRotation);
