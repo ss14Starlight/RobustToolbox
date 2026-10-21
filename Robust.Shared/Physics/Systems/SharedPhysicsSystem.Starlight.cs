@@ -1,6 +1,8 @@
 using System;
 using System.Buffers;
 using System.Numerics;
+using Robust.Shared.GameObjects;
+using Robust.Shared.Physics.Components;
 using Robust.Shared.Physics.Dynamics;
 using Robust.Shared.Physics.Dynamics.Contacts;
 
@@ -156,5 +158,83 @@ public abstract partial class SharedPhysicsSystem
         }
 
         return minSeparation;
+    }
+
+    /// <summary>
+    /// Allows a fully resting dynamic body to sleep when its only constraints are unsolved hard
+    /// contacts against static geometry. Dynamic, kinematic, and joint-connected contacts retain
+    /// the normal <see cref="IslandData.PositionSolved"/> requirement.
+    /// </summary>
+    private static bool CanSleepWithUnsolvedStaticContacts(in IslandData island)
+    {
+        if (island.Joints.Count != 0 || island.Contacts.Count == 0)
+            return false;
+
+        foreach (var contact in island.Contacts)
+        {
+            if (!contact.Enabled ||
+                !contact.IsTouching ||
+                contact.FixtureA?.Hard != true ||
+                contact.FixtureB?.Hard != true ||
+                contact.BodyA is not { } bodyA ||
+                contact.BodyB is not { } bodyB)
+            {
+                return false;
+            }
+
+            var bodyAStatic = bodyA.BodyType == BodyType.Static;
+            var bodyBStatic = bodyB.BodyType == BodyType.Static;
+
+            // Require exactly one static and one ordinary dynamic body.
+            if (bodyAStatic == bodyBStatic)
+                return false;
+
+            var dynamicBody = bodyAStatic ? bodyB : bodyA;
+            if (dynamicBody.BodyType != BodyType.Dynamic)
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// True when this step's velocity and position correction are both under the sleep tolerances.
+    /// Position correction never writes <see cref="PhysicsComponent.LinearVelocity"/>, so a body
+    /// being pushed out of a wall would otherwise accumulate sleep time while it is still moving.
+    /// </summary>
+    private static bool RestingThisStep(
+        PhysicsComponent body,
+        TransformComponent xform,
+        Vector2 positionDelta,
+        float angleDelta,
+        in SolverData data)
+    {
+        if (!body.SleepingAllowed)
+            return false;
+
+        if (body.AngularVelocity * body.AngularVelocity > data.AngTolSqr ||
+            Vector2.Dot(body.LinearVelocity, body.LinearVelocity) > data.LinTolSqr)
+            return false;
+
+        if (float.IsNaN(positionDelta.X) || float.IsNaN(positionDelta.Y) || float.IsNaN(angleDelta))
+            return false;
+
+        // FinalisePositions stores the transform-origin delta, but the solver integrates the
+        // center of mass. Remove origin motion caused only by rotation around an offset center.
+        var oldRotation = new Quaternion2D(xform._localRotation);
+        var newRotation = new Quaternion2D(xform._localRotation + angleDelta);
+        var centerDelta = positionDelta
+                          + Physics.Transform.Mul(newRotation, body.LocalCenter)
+                          - Physics.Transform.Mul(oldRotation, body.LocalCenter);
+
+        var lin = centerDelta * data.InvDt;
+        if (Vector2.Dot(lin, lin) > data.LinTolSqr)
+            return false;
+
+        var ang = angleDelta * data.InvDt;
+        if (ang * ang > data.AngTolSqr)
+            return false;
+
+        return true;
     }
 }
