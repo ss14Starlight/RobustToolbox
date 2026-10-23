@@ -163,11 +163,29 @@ namespace Robust.Shared.Player
             var xformQuery = entMan.GetEntityQuery<TransformComponent>();
             var xformSystem = entMan.System<SharedTransformSystem>();
 
+            // Starlight - start
+            bool IsInRange(EntityUid entity)
+            {
+                return xformQuery.TryGetComponent(entity, out var xform)
+                    && xform.MapID == position.MapId
+                    && (xformSystem.GetWorldPosition(xform) - position.Position).Length() < range;
+            }
+
             return AddWhere(session =>
-                session.AttachedEntity != null &&
-                xformQuery.TryGetComponent(session.AttachedEntity.Value, out var xform) &&
-                xform.MapID == position.MapId &&
-                (xformSystem.GetWorldPosition(xform) - position.Position).Length() < range, playerMan);
+            {
+                if (session.AttachedEntity is { } attached && IsInRange(attached))
+                    return true;
+
+                foreach (var view in session.ViewSubscriptions)
+                {
+                    if (IsInRange(view))
+                        return true;
+                }
+
+                return false;
+            },
+            playerMan);
+            // Starlight - end
         }
 
         /// <summary>
