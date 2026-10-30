@@ -639,9 +639,9 @@ public abstract partial class SharedJointSystem : EntitySystem
             if (contact.EntityA == joint.BodyAUid ||
                 contact.EntityB == joint.BodyAUid)
             {
-                // Flag the contact for filtering at the next time step (where either
-                // body is awake).
-                contact.Flags |= ContactFlags.Filter;
+                // Queue the contact for the next collide pass. CollideContacts is the
+                // only reader of this flag, including when both bodies are asleep.
+                _physics.FlagContactForFilter(contact);
             }
         }
     }

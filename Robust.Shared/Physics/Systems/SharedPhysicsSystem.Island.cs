@@ -923,10 +923,7 @@ public abstract partial class SharedPhysicsSystem
         // Starlight - end
 
         island.PositionSolved = false;
-
-        // Starlight - start
-        var contactsOkay = false;
-        // Starlight - end
+        var contactsOkay = false; // Starlight 
 
         for (var i = 0; i < data.PositionIterations; i++)
         {
@@ -1038,13 +1035,12 @@ public abstract partial class SharedPhysicsSystem
             {
                 for (var i = 0; i < bodyCount; i++)
                 {
-                    var body = island.Bodies[i].Comp1;
+                    var bodyEnt = island.Bodies[i]; // Starlight-edit: Keep the transform so the sleep check can measure this step's movement.
+                    var body = bodyEnt.Comp1; // Starlight
 
                     if (body.BodyType == BodyType.Static) continue;
 
-                    if (!body.SleepingAllowed ||
-                        body.AngularVelocity * body.AngularVelocity > data.AngTolSqr ||
-                        Vector2.Dot(body.LinearVelocity, body.LinearVelocity) > data.LinTolSqr)
+                    if (!RestingThisStep(body, bodyEnt.Comp2, solvedPositions[offset + i], solvedAngles[offset + i], data)) // Starlight-edit: A body leaving a wall has no velocity while the position solver is still moving it.
                     {
                         SetSleepTime(body, 0f);
                     }
@@ -1069,13 +1065,12 @@ public abstract partial class SharedPhysicsSystem
 
                 for (var i = 0; i < bodyCount; i++)
                 {
-                    var body = island.Bodies[i].Comp1;
+                    var bodyEnt = island.Bodies[i]; // Starlight-edit: Keep the transform so the sleep check can measure this step's movement.
+                    var body = bodyEnt.Comp1; // Starlight
 
                     if (body.BodyType == BodyType.Static) continue;
 
-                    if (!body.SleepingAllowed ||
-                        body.AngularVelocity * body.AngularVelocity > data.AngTolSqr ||
-                        Vector2.Dot(body.LinearVelocity, body.LinearVelocity) > data.LinTolSqr)
+                    if (!RestingThisStep(body, bodyEnt.Comp2, solvedPositions[offset + i], solvedAngles[offset + i], data)) // Starlight-edit: A body leaving a wall has no velocity while the position solver is still moving it.
                     {
                         SetSleepTime(body, 0f);
                         minSleepTime = 0.0f;
@@ -1087,7 +1082,8 @@ public abstract partial class SharedPhysicsSystem
                     }
                 }
 
-                if (minSleepTime >= data.TimeToSleep && island.PositionSolved)
+                if (minSleepTime >= data.TimeToSleep &&
+                    (island.PositionSolved || CanSleepWithUnsolvedStaticContacts(in island))) // Starlight-edit: A stopped body stuck in a wall can sleep even though that overlap never solves.
                 {
                     for (var i = 0; i < island.Bodies.Count; i++)
                     {
@@ -1118,7 +1114,11 @@ public abstract partial class SharedPhysicsSystem
             // TODO: Root cause out why this TryComp is necessary.
             // See https://github.com/space-wizards/RobustToolbox/pull/6135
             if (!TryComp(xform.ParentUid, out TransformComponent? transform))
+            {
+                solvedPositions[offset + i] = Vector2.Zero; // Starlight-edit: Clear an unread position delta so a skipped body is not treated as still moving.
+                solvedAngles[offset + i] = 0f; // Starlight-edit: Clear an unread angle delta so a skipped body is not treated as still moving.
                 continue;
+            }
 
             var (_, parentRot, parentInvMatrix) = _transform.GetWorldPositionRotationInvMatrix(transform);
             var worldRot = (float) (parentRot + xform._localRotation);
