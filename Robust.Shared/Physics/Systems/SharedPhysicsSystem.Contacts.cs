@@ -37,6 +37,7 @@ using Microsoft.Extensions.ObjectPool;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Maths;
+using Robust.Shared.Physics;
 using Robust.Shared.Physics.Collision;
 using Robust.Shared.Physics.Collision.Shapes;
 using Robust.Shared.Physics.Components;
@@ -167,6 +168,9 @@ public abstract partial class SharedPhysicsSystem
         contact.ChildIndexB = indexB;
 
         contact.Manifold.PointCount = 0;
+        contact.Generated = false; // Starlight
+        DebugTools.Assert(!contact.QueuedForCollide); // Starlight
+        DebugTools.Assert(!contact.InIslandGraph); // Starlight
 
         //FPE: We only set the friction and restitution if we are not destroying the contact
         if (fixtureA != null && fixtureB != null)
@@ -306,6 +310,8 @@ public abstract partial class SharedPhysicsSystem
         {
             WakeBody(entB.Owner, body: bodyB);
         }
+
+        EnqueueCollide(contact); // Starlight
     }
 
     /// <summary>
@@ -352,6 +358,8 @@ public abstract partial class SharedPhysicsSystem
         var aUid = contact.EntityA;
         var bUid = contact.EntityB;
         contact.Flags |= ContactFlags.Deleting;
+        DequeueCollide(contact); // Starlight
+        UnlinkIslandContact(contact); // Starlight
 
         if (contact.IsTouching)
         {
@@ -394,26 +402,37 @@ public abstract partial class SharedPhysicsSystem
         _contactPool.Return(contact);
     }
 
+    // Starlight-Start: walk the collide queue instead of every contact.
+    // _transformStamp marks this pass so each body transform is built once.
+    // Sleeping pairs are marked generated and removed. Awake pairs are processed until both are asleep.
     internal void CollideContacts()
     {
-        // Due to the fact some contacts may be removed (and we need to update this array as we iterate).
-        // the length may not match the actual contact count, hence we track the index.
-        var contacts = ArrayPool<Contact>.Shared.Rent(ContactCount);
+        if (++_transformStamp == 0)
+            _transformStamp = 1;
+
+        _broadphaseWorldMatrices.Clear();
+
+        // Only contacts that can still change are queued.
+        var contacts = ArrayPool<Contact>.Shared.Rent(Math.Max(_collideCount, 1));
         var index = 0;
 
-        // Can be changed while enumerating
-        // TODO: check for null instead?
-        // Work out which contacts are still valid before we decide to update manifolds.
-        var node = _activeContacts.First;
-
-        while (node != null)
+        var contact = _collideHead;
+        while (contact != null)
         {
-            var contact = node.Value;
-            node = node.Next;
+            var next = contact.CollideNext;
+
+            if ((contact.Flags & (ContactFlags.Deleting | ContactFlags.Deleted)) != 0)
+            {
+                contact = next;
+                continue;
+            }
 
             // It's possible the contact was destroyed by content in which case we just skip it.
             if (!contact.Enabled)
+            {
+                contact = next;
                 continue;
+            }
 
             // No longer pre-init and can be used in the solver.
             contact.Flags &= ~ContactFlags.PreInit;
@@ -431,6 +450,7 @@ public abstract partial class SharedPhysicsSystem
             if (!bodyA.CanCollide || !bodyB.CanCollide)
             {
                 DestroyContact(contact);
+                contact = next;
                 continue;
             }
 
@@ -440,6 +460,7 @@ public abstract partial class SharedPhysicsSystem
             if (xformA.MapID == MapId.Nullspace || xformB.MapID == MapId.Nullspace)
             {
                 DestroyContact(contact);
+                contact = next;
                 continue;
             }
 
@@ -452,6 +473,7 @@ public abstract partial class SharedPhysicsSystem
                     !ShouldCollideJoints(uidA, uidB))
                 {
                     DestroyContact(contact);
+                    contact = next;
                     continue;
                 }
 
@@ -463,8 +485,11 @@ public abstract partial class SharedPhysicsSystem
             bool activeB = bodyB.Awake && bodyB.BodyType != BodyType.Static;
 
             // At least one body must be awake and it must be dynamic or kinematic.
-            if (activeA == false && activeB == false)
+            // A settled pair is dropped from the queue so the next substep does not visit it.
+            if (!activeA && !activeB)
             {
+                FinishQueuedContact(contact);
+                contact = next;
                 continue;
             }
 
@@ -472,14 +497,15 @@ public abstract partial class SharedPhysicsSystem
             if (xformA.MapUid == null || xformA.MapUid != xformB.MapUid)
             {
                 DestroyContact(contact);
+                contact = next;
                 continue;
             }
 
             // Special-case grid contacts.
             if ((contact.Flags & ContactFlags.Grid) != 0x0)
             {
-                var gridABounds = fixtureA.Shape.ComputeAABB(GetPhysicsTransform(uidA, xformA), 0);
-                var gridBBounds = fixtureB.Shape.ComputeAABB(GetPhysicsTransform(uidB, xformB), 0);
+                var gridABounds = fixtureA.Shape.ComputeAABB(CachedPhysicsTransform(bodyA, uidA, xformA), 0);
+                var gridBBounds = fixtureB.Shape.ComputeAABB(CachedPhysicsTransform(bodyB, uidB, xformB), 0);
 
                 if (!gridABounds.Intersects(gridBBounds))
                 {
@@ -489,13 +515,12 @@ public abstract partial class SharedPhysicsSystem
                 {
                     // Grid contact is still alive.
                     contact.Flags &= ~ContactFlags.Island;
-                    if (index >= contacts.Length)
-                    {
-                        Log.Error($"Insufficient contact length at 388! Index {index} and length is {contacts.Length}. Tell Sloth");
-                    }
+                    contacts = GrowContacts(contacts, index);
                     contacts[index++] = contact;
+                    FinishQueuedContact(contact);
                 }
 
+                contact = next;
                 continue;
             }
 
@@ -503,6 +528,7 @@ public abstract partial class SharedPhysicsSystem
             {
                 Log.Error($"Found invalid contact index of {indexA} on {contact.FixtureAId} / {ToPrettyString(uidA)}, expected {fixtureA.Proxies.Length}");
                 DestroyContact(contact);
+                contact = next;
                 continue;
             }
 
@@ -510,6 +536,7 @@ public abstract partial class SharedPhysicsSystem
             {
                 Log.Error($"Found invalid contact index of {indexB} on {contact.FixtureBId} / {ToPrettyString(uidB)}, expected {fixtureB.Proxies.Length}");
                 DestroyContact(contact);
+                contact = next;
                 continue;
             }
 
@@ -528,12 +555,10 @@ public abstract partial class SharedPhysicsSystem
                 }
                 else
                 {
-                    // TODO maybe change this? Needs benchmarking.
-                    // Instead of transforming both boxes (which enlarges both aabbs), maybe just transform one box.
-                    // I.e. use (matrixA * invMatrixB).TransformBox(). Or (invMatrixB * matrixA), whichever is correct.
-                    // Alternatively, maybe just directly construct the relative transform matrix?
-                    var proxyAWorldAABB = _transform.GetWorldMatrix(XformQuery.GetComponent(broadphaseA.Value)).TransformBox(proxyA.AABB);
-                    var proxyBWorldAABB = _transform.GetWorldMatrix(XformQuery.GetComponent(broadphaseB.Value)).TransformBox(proxyB.AABB);
+                    // World matrices are shared by every proxy on a broadphase. Computing them per contact
+                    // dominates shuttle and multi-grid rounds, where one grid transform covers thousands of pairs.
+                    var proxyAWorldAABB = BroadphaseWorldMatrix(broadphaseA.Value).TransformBox(proxyA.AABB);
+                    var proxyBWorldAABB = BroadphaseWorldMatrix(broadphaseB.Value).TransformBox(proxyB.AABB);
                     overlap = proxyAWorldAABB.Intersects(proxyBWorldAABB);
                 }
             }
@@ -542,50 +567,60 @@ public abstract partial class SharedPhysicsSystem
             if (!overlap)
             {
                 DestroyContact(contact);
+                contact = next;
                 continue;
             }
 
             // Contact is actually going to live for manifold generation and solving.
             // This can also short-circuit above for grid contacts.
             contact.Flags &= ~ContactFlags.Island;
-            if (index >= contacts.Length)
-            {
-                Log.Error($"Insufficient contact length at 429! Index {index} and length is {contacts.Length}. Tell Sloth");
-            }
-
+            contacts = GrowContacts(contacts, index);
             contacts[index++] = contact;
+            FinishQueuedContact(contact);
+            contact = next;
         }
 
-        var status = ArrayPool<ContactStatus>.Shared.Rent(index);
-        var worldPoints = ArrayPool<FixedArray4<Vector2>>.Shared.Rent(index);
+        var buffer = Math.Max(index, 1);
+        var status = ArrayPool<ContactStatus>.Shared.Rent(buffer);
+        var worldPoints = ArrayPool<FixedArray4<Vector2>>.Shared.Rent(buffer);
+        var transformsA = ArrayPool<Transform>.Shared.Rent(buffer);
+        var transformsB = ArrayPool<Transform>.Shared.Rent(buffer);
+
+        for (var i = 0; i < index; i++)
+        {
+            var live = contacts[i];
+            transformsA[i] = CachedPhysicsTransform(live.BodyA!, live.EntityA, live.XformA!);
+            transformsB[i] = CachedPhysicsTransform(live.BodyB!, live.EntityB, live.XformB!);
+        }
 
         // Update contacts all at once.
-        BuildManifolds(contacts, index, status, worldPoints);
+        BuildManifolds(contacts, index, status, worldPoints, transformsA, transformsB);
 
         // Single-threaded so content doesn't need to worry about race conditions.
         for (var i = 0; i < index; i++)
         {
-            if (i >= contacts.Length)
-            {
-                Log.Error($"Invalid contact length for contact events!");
-                continue;
-            }
+            var live = contacts[i];
 
-            var contact = contacts[i];
+            if ((live.Flags & (ContactFlags.Deleting | ContactFlags.Deleted)) != 0)
+                continue;
+
+            // Island build only needs hard touching contacts. Keep that list in step with the manifold.
+            SyncIslandContact(live);
 
             // It's possible the contact was disabled above if DestroyContact lead to even more being destroyed.
-            if (!contact.Enabled)
-            {
+            if (!live.Enabled)
                 continue;
-            }
 
-            RunContactEvents(status[i], contact, worldPoints[i]);
+            RunContactEvents(status[i], live, worldPoints[i]);
         }
 
-        ArrayPool<Contact>.Shared.Return(contacts);
+        ArrayPool<Contact>.Shared.Return(contacts, true);
         ArrayPool<ContactStatus>.Shared.Return(status);
         ArrayPool<FixedArray4<Vector2>>.Shared.Return(worldPoints);
+        ArrayPool<Transform>.Shared.Return(transformsA);
+        ArrayPool<Transform>.Shared.Return(transformsB);
     }
+    // Starlight-End
 
     internal void RunContactEvents(ContactStatus status, Contact contact, FixedArray4<Vector2> worldPoint)
     {
@@ -641,7 +676,7 @@ public abstract partial class SharedPhysicsSystem
         }
     }
 
-    private void BuildManifolds(Contact[] contacts, int count, ContactStatus[] status, FixedArray4<Vector2>[] worldPoints)
+    private void BuildManifolds(Contact[] contacts, int count, ContactStatus[] status, FixedArray4<Vector2>[] worldPoints, Transform[] transformsA, Transform[] transformsB) // Starlight
     {
         if (count == 0)
             return;
@@ -656,6 +691,8 @@ public abstract partial class SharedPhysicsSystem
             WorldPoints = worldPoints,
             Contacts = contacts,
             Wake = wake,
+            TransformsA = transformsA, // Starlight
+            TransformsB = transformsB, // Starlight
         }, count);
 
         // Can't do this during UpdateContacts due to IoC threading issues.
@@ -687,14 +724,16 @@ public abstract partial class SharedPhysicsSystem
         public ContactStatus[] Status;
         public FixedArray4<Vector2>[] WorldPoints;
         public bool[] Wake;
+        public Transform[] TransformsA; // Starlight
+        public Transform[] TransformsB; // Starlight
 
         public void Execute(int index)
         {
-            Physics.UpdateContact(Contacts, index, Status, Wake, WorldPoints);
+            Physics.UpdateContact(Contacts, index, Status, Wake, WorldPoints, TransformsA, TransformsB); // Starlight
         }
     }
 
-    private void UpdateContact(Contact[] contacts, int index, ContactStatus[] status, bool[] wake, FixedArray4<Vector2>[] worldPoints)
+    private void UpdateContact(Contact[] contacts, int index, ContactStatus[] status, bool[] wake, FixedArray4<Vector2>[] worldPoints, Transform[] transformsA, Transform[] transformsB) // Starlight
     {
         var contact = contacts[index];
 
@@ -709,10 +748,8 @@ public abstract partial class SharedPhysicsSystem
             return;
         }
 
-        var uidA = contact.EntityA;
-        var uidB = contact.EntityB;
-        var bodyATransform = GetPhysicsTransform(uidA);
-        var bodyBTransform = GetPhysicsTransform(uidB);
+        var bodyATransform = transformsA[index]; // Starlight
+        var bodyBTransform = transformsB[index]; // Starlight
 
         var contactStatus = contact.Update(bodyATransform, bodyBTransform, out wake[index]);
         status[index] = contactStatus;
