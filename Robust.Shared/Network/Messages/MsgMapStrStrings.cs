@@ -25,7 +25,7 @@ namespace Robust.Shared.Network.Messages
         public override void ReadFromBuffer(NetIncomingMessage buffer, IRobustSerializer serializer)
         {
             var size = buffer.ReadVariableInt32();
-            buffer.ValidateReadLength(size); // Starlight-edit
+            buffer.AssertAtLeastSize(size);
             buffer.ReadBytes(Package = new byte[size]);
         }
 

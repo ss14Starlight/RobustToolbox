@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Lidgren.Network;
 using Robust.Shared.Enums;
 using Robust.Shared.GameStates;
@@ -17,7 +17,10 @@ namespace Robust.Shared.Network.Messages
         public override void ReadFromBuffer(NetIncomingMessage buffer, IRobustSerializer serializer)
         {
             var playerCount = buffer.ReadInt32();
-            buffer.ValidateReadLength(playerCount); // Starlight-edit
+
+            // playerCount * (sizeof(string) + sizeof(guid) + sizeof(byte))
+            buffer.AssertAtLeastSize(playerCount * (NetMessageExt.MinSizeOfString + NetMessageExt.SizeOfGuid + sizeof(byte)));
+
             Plyrs = new List<SessionState>(playerCount);
             for (var i = 0; i < playerCount; i++)
             {

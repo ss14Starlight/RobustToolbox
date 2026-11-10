@@ -38,6 +38,7 @@ namespace Robust.Shared.Prototypes
         [Dependency] private IComponentFactory _factory = default!;
         [Dependency] private IEntityManager _entMan = default!;
         [Dependency] private IRobustRandom _random = default!;
+        [Dependency] private IComponentFactory _compFactory = default!;
 
         private readonly Dictionary<string, FrozenDictionary<string, MappingDataNode>> _prototypeDataCache = []; // Starlight-edit
 
@@ -45,6 +46,11 @@ namespace Robust.Shared.Prototypes
 
         private readonly Dictionary<string, Type> _kindNames = []; // Starlight-edit
         private readonly Dictionary<Type, int> _kindPriorities = []; // Starlight-edit
+
+        /// <summary>
+        /// Guards <see cref="KindData.UnfrozenVariants"/> against concurrent modification.
+        /// </summary>
+        private readonly Lock _variantRegistrationLock = new();
 
         protected ISawmill Sawmill = default!;
 

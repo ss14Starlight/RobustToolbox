@@ -1,4 +1,4 @@
-using Lidgren.Network;
+﻿using Lidgren.Network;
 using Robust.Shared.Serialization;
 using Robust.Shared.Utility;
 
@@ -13,9 +13,11 @@ namespace Robust.Shared.Network.Messages
         public override void ReadFromBuffer(NetIncomingMessage buffer, IRobustSerializer serializer)
         {
             var count = buffer.ReadInt32();
-            buffer.ValidateReadLength(count); // Starlight-edit
-            Paths = new ResPath[count];
 
+            // count * sizeof(ResPath)
+            buffer.AssertAtLeastSize(count * NetMessageExt.MinSizeOfResPath);
+
+            Paths = new ResPath[count];
             for (var i = 0; i < count; i++)
             {
                 Paths[i] = new ResPath(buffer.ReadString());
