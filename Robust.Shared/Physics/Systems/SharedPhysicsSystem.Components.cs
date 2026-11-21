@@ -533,6 +533,9 @@ public partial class SharedPhysicsSystem
             AddAwakeBody((uid, body, Transform(uid)));
         else
             RemoveSleepBody((uid, body, Transform(uid)));
+
+        // A wake has to pull existing contacts back into collide. Sleep drops pairs whose other body is idle.
+        RefreshQueuedContacts(body); // Starlight
     }
 
     public void TrySetBodyType(EntityUid uid, BodyType value, FixturesComponent? manager = null, PhysicsComponent? body = null, TransformComponent? xform = null)
@@ -658,6 +661,8 @@ public partial class SharedPhysicsSystem
         if (dirty)
             DirtyField(uid, body, nameof(PhysicsComponent.CanCollide));
 
+        // SetAwake(false) does not run when the body was already asleep, so this refresh is still required.
+        RefreshQueuedContacts(body); // Starlight
         return value;
     }
 

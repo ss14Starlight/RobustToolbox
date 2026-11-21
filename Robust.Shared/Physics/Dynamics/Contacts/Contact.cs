@@ -68,6 +68,18 @@ namespace Robust.Shared.Physics.Dynamics.Contacts
         /// </summary>
         public readonly LinkedListNode<Contact> BodyBNode;
 
+        // Starlight: collide-queue and island-graph links. Sleeping pairs leave the queue
+        // after generation; these stay null while the contact is pooled.
+        internal bool Generated;
+        internal bool QueuedForCollide;
+        internal bool InIslandGraph;
+        internal Contact? CollidePrev;
+        internal Contact? CollideNext;
+        internal Contact? IslandPrevA;
+        internal Contact? IslandNextA;
+        internal Contact? IslandPrevB;
+        internal Contact? IslandNextB;
+
         public EntityUid EntityA;
         public EntityUid EntityB;
 

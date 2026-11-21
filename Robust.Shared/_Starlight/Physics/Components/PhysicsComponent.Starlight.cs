@@ -1,4 +1,6 @@
 using System.Numerics;
+using Robust.Shared.Physics.Dynamics.Contacts;
+using Transform = Robust.Shared.Physics.Transform;
 using Robust.Shared.GameObjects;
 
 namespace Robust.Shared.Physics.Components;
@@ -6,6 +8,12 @@ namespace Robust.Shared.Physics.Components;
 public sealed partial class PhysicsComponent
 {
     internal bool ClippingRecoveryActive;
+    internal Vector2 ClippingRecoveryDirection;
+
+    // Starlight: per-step transform cache and the head of this body's island-contact list.
+    internal uint TransformStamp;
+    internal Transform TransformCache;
+    internal Contact? IslandContactHead;
 
     /// <summary>
     /// Positive: how long the body has been stuck. Negative: cooldown left after a search that found no free position.
