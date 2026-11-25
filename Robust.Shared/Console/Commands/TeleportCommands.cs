@@ -142,6 +142,8 @@ public sealed partial class TeleportToCommand : LocalizedEntityCommands
             _transform.SetMapCoordinates(victim.Entity, targetMapCoords);
             _transform.AttachToGridOrMap(victim.Entity, victim.Transform);
         }
+
+        shell.WriteMarkup("[color=gold]tpto is obsolete, use tp:to instead.[/color]"); // Starlight
     }
 
     private bool TryGetTransformFromUidOrUsername(

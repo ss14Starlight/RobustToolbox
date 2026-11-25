@@ -7,7 +7,7 @@ using Robust.Shared.Map;
 namespace Robust.Shared.Toolshed.Commands.Entities.World;
 
 [ToolshedCommand]
-internal sealed class TpCommand : ToolshedCommand
+internal sealed partial class TpCommand : ToolshedCommand // Starlight edit
 {
     private SharedTransformSystem? _xform;
 
@@ -27,16 +27,26 @@ internal sealed class TpCommand : ToolshedCommand
         => teleporters.Select(x => TpCoords(x, target));
 
     [CommandImplementation("to")]
-    public EntityUid TpTo([PipedArgument] EntityUid teleporter, EntityUid target)
+    public EntityUid TpTo(IInvocationContext ctx, [PipedArgument] EntityUid teleporter, [CommandArgument(typeof(EntityOrSessionParser))] EntityUid target) // Starlight edit
     {
+        // Starlight begin
+        if (!CanTeleportTo(ctx, teleporter, target))
+            return teleporter;
+        // Starlight end
+
         _xform ??= GetSys<SharedTransformSystem>();
         _xform.SetCoordinates(teleporter, Transform(target).Coordinates);
         return teleporter;
     }
 
     [CommandImplementation("to")]
-    public IEnumerable<EntityUid> TpTo([PipedArgument] IEnumerable<EntityUid> teleporters, EntityUid target)
-        => teleporters.Select(x => TpTo(x, target));
+    // Starlight begin
+    public IEnumerable<EntityUid> TpTo(
+        IInvocationContext ctx,
+        [PipedArgument] IEnumerable<EntityUid> teleporters,
+        [CommandArgument(typeof(EntityOrSessionParser))] EntityUid target) =>
+        [.. teleporters.Select(x => TpTo(ctx, x, target))];
+    // Starlight end
 
     [CommandImplementation("into")]
     public EntityUid TpInto([PipedArgument] EntityUid teleporter, EntityUid target)
